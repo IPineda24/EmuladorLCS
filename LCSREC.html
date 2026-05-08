@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador Interactivo LCS</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --cell-border: #dee2e6;
+            --active-bg: #ffe066;
+            --eval-bg: #e9ecef;
+            --match-bg: #b2f2bb;
+            --header-bg: #343a40;
+            --header-text: #ffffff;
+            --text-color: #212529;
+            --pending-text: #adb5bd;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .controls {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #0d6efd;
+            color: white;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+
+        button:hover { background-color: #0b5ed7; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        
+        .btn-danger { background-color: #dc3545; }
+        .btn-danger:hover { background-color: #bb2d3b; }
+
+        .explanation {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 900px;
+            min-height: 60px;
+            font-size: 16px;
+            line-height: 1.5;
+            text-align: center;
+        }
+
+        /* Contenedor principal para colocar las tablas a la par */
+        .tables-container {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 20px;
+            width: 100%;
+            max-width: 1400px;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .table-wrapper {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow-x: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            min-width: 400px; /* Evita que las tablas se encojan demasiado */
+        }
+
+        .table-wrapper h2 {
+            font-size: 18px;
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+
+        table {
+            border-collapse: collapse;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        th, td {
+            border: 1px solid var(--cell-border);
+            width: 40px;
+            height: 40px;
+            text-align: center;
+            vertical-align: middle;
+            transition: background-color 0.3s;
+        }
+
+        #recTable th, #recTable td {
+            width: 75px; 
+            font-size: 12px;
+        }
+
+        th {
+            background-color: var(--header-bg);
+            color: var(--header-text);
+            font-weight: bold;
+        }
+
+        /* Indicadores visuales */
+        .active { background-color: var(--active-bg) !important; font-weight: bold; color: var(--text-color) !important; }
+        .eval { background-color: var(--eval-bg) !important; color: #6c757d !important; }
+        .match { background-color: var(--match-bg) !important; font-weight: bold; color: var(--text-color) !important; }
+        .pending { color: var(--pending-text); }
+
+    </style>
+</head>
+<body>
+
+    <h1>Simulador Interactivo: Longest Common Subsequence</h1>
+
+    <div class="controls">
+        <button id="btnPrev" onclick="stepPrev()">⏮ Anterior</button>
+        <button id="btnNext" onclick="stepNext()">Siguiente ⏭</button>
+        <button id="btnPlay" onclick="togglePlay()">▶ Reproducir</button>
+        <button class="btn-danger" onclick="resetSim()">↺ Reiniciar</button>
+        <div style="margin-left: 15px; display: flex; align-items: center; gap: 5px;">
+            <label for="speedRange" style="font-size: 14px; font-weight: bold;">Velocidad:</label>
+            <input type="range" id="speedRange" min="100" max="1500" value="800" dir="rtl" onchange="updateSpeed()">
+        </div>
+    </div>
+
+    <div class="explanation" id="explanation">
+        Haz clic en <strong>Siguiente</strong> o <strong>Reproducir</strong> para comenzar la simulación.
+    </div>
+
+    <div class="tables-container">
+        <div class="table-wrapper">
+            <h2>Tabla DP (Longitud Máxima)</h2>
+            <table id="dpTable"></table>
+        </div>
+        <div class="table-wrapper">
+            <h2>Tabla REC (Subsecuencia)</h2>
+            <table id="recTable"></table>
+        </div>
+    </div>
+
+    <script>
+        // Datos de entrada
+        const S1 = [3, 9, 8, 3, 10, 5, 2];
+        const S2 = [9, 3, 10, 8, 2, 5];
+        const n1 = S1.length;
+        const n2 = S2.length;
+        
+        let dp = [];
+        let rec = [];
+        let stepsData = [];
+        let currentStep = -1;
+        let totalSteps = n1 * n2;
+        
+        let playInterval = null;
+        let speed = 800;
+
+        // Pre-calcular toda la tabla
+        function initData() {
+            // Simulamos la inicialización original en Python (dp llena de -1)
+            dp = Array(n1 + 1).fill().map(() => Array(n2 + 1).fill(-1));
+            rec = Array(n1 + 1).fill().map(() => Array(n2 + 1).fill([]));
+
+            // Casos base
+            for (let j = 0; j <= n2; j++) dp[0][j] = 0;
+            for (let i = 0; i <= n1; i++) dp[i][0] = 0;
+
+            stepsData = [];
+
+            for (let i = 1; i <= n1; i++) {
+                for (let j = 1; j <= n2; j++) {
+                    let match = (S1[i - 1] === S2[j - 1]);
+                    
+                    if (match) {
+                        dp[i][j] = 1 + dp[i - 1][j - 1];
+                        rec[i][j] = [...rec[i - 1][j - 1], S1[i - 1]];
+                    } else {
+                        if (dp[i][j - 1] > dp[i - 1][j]) {
+                            dp[i][j] = dp[i][j - 1];
+                            rec[i][j] = [...rec[i][j - 1]];
+                        } else {
+                            dp[i][j] = dp[i - 1][j];
+                            rec[i][j] = [...rec[i - 1][j]];
+                        }
+                    }
+
+                    stepsData.push({
+                        i: i, j: j, match: match,
+                        v1: S1[i - 1], v2: S2[j - 1],
+                        dpLeft: dp[i][j - 1], dpUp: dp[i - 1][j],
+                        dpDiag: dp[i - 1][j - 1],
+                        dpResult: dp[i][j], recResult: rec[i][j]
+                    });
+                }
+            }
+        }
+
+        // Crear las estructuras HTML de las tablas
+        function createTables() {
+            const createGrid = (id, isRec) => {
+                const table = document.getElementById(id);
+                table.innerHTML = '';
+                
+                let headerRow = document.createElement('tr');
+                headerRow.innerHTML = '<th>S1 \\ S2</th><th>0</th>' + S2.map(val => `<th>${val}</th>`).join('');
+                table.appendChild(headerRow);
+
+                for (let i = 0; i <= n1; i++) {
+                    let tr = document.createElement('tr');
+                    
+                    let th = document.createElement('th');
+                    th.innerText = i === 0 ? '0' : S1[i - 1];
+                    tr.appendChild(th);
+
+                    for (let j = 0; j <= n2; j++) {
+                        let td = document.createElement('td');
+                        td.id = `${id}-cell-${i}-${j}`;
+                        
+                        if (i === 0 || j === 0) {
+                            // Casos base llenos de 0 y []
+                            td.innerText = isRec ? "[]" : "0";
+                            td.style.backgroundColor = "#f1f3f5";
+                            td.style.color = "var(--text-color)";
+                        } else {
+                            // Estado inicial: celdas no procesadas muestran -1
+                            td.innerText = isRec ? "[]" : "-1";
+                            td.className = "pending";
+                        }
+                        tr.appendChild(td);
+                    }
+                    table.appendChild(tr);
+                }
+            };
+
+            createGrid('dpTable', false);
+            createGrid('recTable', true);
+        }
+
+        // Renderizar el estado visual
+        function renderStep(stepIndex) {
+            for (let i = 1; i <= n1; i++) {
+                for (let j = 1; j <= n2; j++) {
+                    let k = (i - 1) * n2 + (j - 1);
+                    let dpTd = document.getElementById(`dpTable-cell-${i}-${j}`);
+                    let recTd = document.getElementById(`recTable-cell-${i}-${j}`);
+
+                    dpTd.className = '';
+                    recTd.className = '';
+
+                    if (k <= stepIndex) {
+                        // Celdas ya procesadas
+                        dpTd.innerText = dp[i][j];
+                        recTd.innerText = "[" + rec[i][j].join(", ") + "]";
+                        dpTd.style.color = "var(--text-color)";
+                        recTd.style.color = "var(--text-color)";
+                    } else {
+                        // Celdas en espera (mantienen el -1 como en Python)
+                        dpTd.innerText = '-1';
+                        recTd.innerText = '[]';
+                        dpTd.className = 'pending';
+                        recTd.className = 'pending';
+                    }
+                }
+            }
+
+            const exp = document.getElementById('explanation');
+
+            if (stepIndex >= 0 && stepIndex < stepsData.length) {
+                let data = stepsData[stepIndex];
+                let { i, j, match } = data;
+
+                document.getElementById(`dpTable-cell-${i}-${j}`).classList.add('active');
+                document.getElementById(`recTable-cell-${i}-${j}`).classList.add('active');
+
+                if (match) {
+                    document.getElementById(`dpTable-cell-${i-1}-${j-1}`).classList.add('match');
+                    document.getElementById(`recTable-cell-${i-1}-${j-1}`).classList.add('match');
+                    
+                    exp.innerHTML = `<strong>Paso ${stepIndex + 1}/${totalSteps}:</strong> S1[${i}] = ${data.v1} y S2[${j}] = ${data.v2} <span style="color: #198754;"><strong>COINCIDEN</strong></span>.<br>
+                    → Tomamos el valor de la diagonal <code>dp[${i-1}][${j-1}] (${data.dpDiag})</code> y sumamos 1 = <strong>${data.dpResult}</strong>.`;
+                } else {
+                    document.getElementById(`dpTable-cell-${i-1}-${j}`).classList.add('eval');
+                    document.getElementById(`dpTable-cell-${i}-${j-1}`).classList.add('eval');
+                    document.getElementById(`recTable-cell-${i-1}-${j}`).classList.add('eval');
+                    document.getElementById(`recTable-cell-${i}-${j-1}`).classList.add('eval');
+                    
+                    exp.innerHTML = `<strong>Paso ${stepIndex + 1}/${totalSteps}:</strong> S1[${i}] = ${data.v1} y S2[${j}] = ${data.v2} <span style="color: #dc3545;"><strong>NO COINCIDEN</strong></span>.<br>
+                    → Evaluando: <code>max(Arriba: ${data.dpUp}, Izquierda: ${data.dpLeft})</code> = <strong>${data.dpResult}</strong>.`;
+                }
+            } else if (stepIndex >= stepsData.length) {
+                exp.innerHTML = `<strong>¡Simulación Finalizada!</strong><br>La subsecuencia común más larga es de longitud <strong>${dp[n1][n2]}</strong> y está formada por: <strong>[${rec[n1][n2].join(", ")}]</strong>.`;
+                pauseSim();
+            } else {
+                exp.innerHTML = "Haz clic en <strong>Siguiente</strong> o <strong>Reproducir</strong> para comenzar la simulación.";
+            }
+
+            document.getElementById('btnPrev').disabled = (stepIndex < 0);
+            document.getElementById('btnNext').disabled = (stepIndex >= stepsData.length);
+        }
+
+        // Controles de Reproducción
+        function stepNext() {
+            if (currentStep < totalSteps) {
+                currentStep++;
+                renderStep(currentStep);
+            }
+        }
+
+        function stepPrev() {
+            if (currentStep >= 0) {
+                currentStep--;
+                renderStep(currentStep);
+            }
+        }
+
+        function togglePlay() {
+            const btn = document.getElementById('btnPlay');
+            if (playInterval) {
+                pauseSim();
+            } else {
+                if (currentStep >= totalSteps) resetSim();
+                btn.innerText = "⏸ Pausar";
+                btn.classList.add("btn-danger");
+                playInterval = setInterval(() => {
+                    if (currentStep < totalSteps) {
+                        stepNext();
+                    } else {
+                        pauseSim();
+                    }
+                }, speed);
+            }
+        }
+
+        function pauseSim() {
+            clearInterval(playInterval);
+            playInterval = null;
+            const btn = document.getElementById('btnPlay');
+            btn.innerText = "▶ Reproducir";
+            btn.classList.remove("btn-danger");
+        }
+
+        function resetSim() {
+            pauseSim();
+            currentStep = -1;
+            renderStep(currentStep);
+        }
+
+        function updateSpeed() {
+            speed = document.getElementById('speedRange').value;
+            if (playInterval) {
+                pauseSim();
+                togglePlay();
+            }
+        }
+
+        window.onload = () => {
+            initData();
+            createTables();
+            renderStep(currentStep);
+        };
+    </script>
+</body>
+</html>
